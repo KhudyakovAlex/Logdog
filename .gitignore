@@ -12,4 +12,6 @@ data/
 *.db-wal
 *.db-shm
 
+.cursor/mcp.json
+
 .env
