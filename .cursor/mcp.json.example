@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "logdog": {
+      "command": ".venv\\Scripts\\python.exe",
+      "args": ["-m", "logdog.mcp_server"],
+      "env": {
+        "LOGDOG_DB_PATH": "./data/logdog.db"
+      }
+    }
+  }
+}
+
