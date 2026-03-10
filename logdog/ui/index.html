@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Logdog UI</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: #0f1a2e;
+        --text: #e7eefc;
+        --muted: #9bb0d0;
+        --border: #213257;
+        --accent: #7aa2ff;
+        --error: #ff6b6b;
+        --warn: #ffd166;
+        --info: #55d6c2;
+        --debug: #a7b7d6;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 800px at 10% 0%, #15234a 0%, var(--bg) 45%);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 150%;
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 18px 14px 40px;
+      }
+      header {
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-size: 27px;
+        margin: 0;
+        letter-spacing: 0.2px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 18px;
+      }
+      .panel {
+        background: color-mix(in srgb, var(--panel) 92%, black);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 10px;
+        align-items: end;
+      }
+      label {
+        display: block;
+        font-size: 18px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      input, select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: #0a1326;
+        color: var(--text);
+        outline: none;
+      }
+      input::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
+      .btns {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: linear-gradient(180deg, #1c2f5d, #122245);
+        color: var(--text);
+        padding: 9px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.primary {
+        border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+        background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 28%, #1c2f5d), #122245);
+      }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .grid-3 { grid-column: span 3; }
+      .grid-2 { grid-column: span 2; }
+      .grid-4 { grid-column: span 4; }
+      .grid-6 { grid-column: span 6; }
+      .grid-12 { grid-column: span 12; }
+      .right { display: flex; justify-content: flex-end; }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .meta {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 18px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .table {
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .thead, .trow {
+        display: grid;
+        grid-template-columns: 120px 78px 160px 1fr 120px;
+        gap: 10px;
+        align-items: start;
+      }
+      .thead {
+        padding: 10px 12px;
+        background: #0a1326;
+        border-bottom: 1px solid var(--border);
+        font-size: 18px;
+        color: var(--muted);
+      }
+      .trow {
+        padding: 10px 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+        font-size: 19.5px;
+      }
+      .trow:last-child { border-bottom: 0; }
+      .mono { font-family: var(--mono); }
+      .msg {
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.35;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, #0a1326 85%, transparent);
+        font-size: 18px;
+        width: fit-content;
+      }
+      .lvl-debug { color: var(--debug); border-color: color-mix(in srgb, var(--debug) 30%, var(--border)); }
+      .lvl-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, var(--border)); }
+      .lvl-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, var(--border)); }
+      .lvl-error { color: var(--error); border-color: color-mix(in srgb, var(--error) 30%, var(--border)); }
+      .small { font-size: 18px; color: var(--muted); }
+      .errbox {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid color-mix(in srgb, var(--error) 50%, var(--border));
+        background: color-mix(in srgb, var(--error) 10%, transparent);
+        color: color-mix(in srgb, var(--text) 92%, white);
+        display: none;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      @media (max-width: 920px) {
+        .thead, .trow { grid-template-columns: 120px 78px 1fr; }
+        .col-app, .col-trace { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Logdog UI</h1>
+          <div class="sub">Просмотр логов из SQLite через HTTP API: <span class="mono">/api/recent</span>, <span class="mono">/api/query</span></div>
+        </div>
+        <div class="sub">Ingest: <span class="mono">POST /logs</span></div>
+      </header>
+
+      <div class="panel">
+        <div class="controls">
+          <div class="grid-3">
+            <label>App</label>
+            <select id="app">
+              <option value="">(any)</option>
+            </select>
+          </div>
+          <div class="grid-2">
+            <label>Level</label>
+            <select id="level">
+              <option value="">(any)</option>
+              <option value="debug">debug</option>
+              <option value="info">info</option>
+              <option value="warn">warn</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          <div class="grid-4">
+            <label>Contains (message)</label>
+            <input id="contains" placeholder="подстрока в message" />
+          </div>
+          <div class="grid-3">
+            <label>TraceId</label>
+            <input id="traceId" placeholder="trace id" />
+          </div>
+          <div class="grid-3">
+            <label>Since (ISO/datetime-local)</label>
+            <input id="since" type="datetime-local" />
+          </div>
+          <div class="grid-3">
+            <label>Until (ISO/datetime-local)</label>
+            <input id="until" type="datetime-local" />
+          </div>
+          <div class="grid-2">
+            <label>Limit</label>
+            <input id="limit" type="number" min="1" max="5000" value="200" />
+          </div>
+          <div class="grid-4">
+            <label>Auto refresh</label>
+            <div class="row">
+              <select id="autoEvery">
+                <option value="0">off</option>
+                <option value="1000">1s</option>
+                <option value="2000" selected>2s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+              </select>
+              <label class="small"><input id="useQuery" type="checkbox" /> использовать query (иначе recent)</label>
+            </div>
+          </div>
+          <div class="grid-12 right">
+            <div class="btns">
+              <button class="primary" id="btnLoad">Load</button>
+              <button id="btnClear">Clear</button>
+              <button id="btnCopyLink" title="Скопировать URL с параметрами">Copy link</button>
+            </div>
+          </div>
+        </div>
+        <div class="errbox" id="errbox"></div>
+        <div class="meta">
+          <div id="status">—</div>
+          <div class="mono">tip: <a href="/docs" target="_blank" rel="noreferrer">/docs</a></div>
+        </div>
+      </div>
+
+      <div class="table" id="table">
+        <div class="thead">
+          <div>Time</div>
+          <div>Level</div>
+          <div class="col-app">App</div>
+          <div>Message</div>
+          <div class="col-trace">Trace</div>
+        </div>
+        <div id="rows"></div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const state = { timer: null, lastCount: 0, lastLoadAt: 0 };
+
+      function toMsFromDateTimeLocal(v) {
+        if (!v) return null;
+        const dt = new Date(v);
+        if (isNaN(dt.getTime())) return null;
+        return dt.getTime();
+      }
+
+      function fmtTs(ms) {
+        const d = new Date(ms);
+        if (isNaN(d.getTime())) return String(ms);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+
+      function lvlClass(lvl) {
+        return `pill mono lvl-${String(lvl || "debug")}`;
+      }
+
+      function showError(msg) {
+        const box = $("errbox");
+        box.textContent = msg;
+        box.style.display = msg ? "block" : "none";
+      }
+
+      function paramsFromUI() {
+        const limit = parseInt($("limit").value || "200", 10);
+        const app = $("app").value.trim();
+        const level = $("level").value.trim();
+        const contains = $("contains").value.trim();
+        const traceId = $("traceId").value.trim();
+        const since = toMsFromDateTimeLocal($("since").value);
+        const until = toMsFromDateTimeLocal($("until").value);
+        return {
+          limit: isFinite(limit) ? Math.max(1, Math.min(5000, limit)) : 200,
+          app: app || null,
+          level: level || null,
+          contains: contains || null,
+          traceId: traceId || null,
+          since: since,
+          until: until,
+        };
+      }
+
+      function setUIFromParams(urlParams) {
+        if (urlParams.has("app")) $("app").value = urlParams.get("app") || "";
+        if (urlParams.has("level")) $("level").value = urlParams.get("level") || "";
+        if (urlParams.has("contains")) $("contains").value = urlParams.get("contains") || "";
+        if (urlParams.has("traceId")) $("traceId").value = urlParams.get("traceId") || "";
+        if (urlParams.has("limit")) $("limit").value = urlParams.get("limit") || "200";
+        if (urlParams.has("sinceIso")) $("since").value = urlParams.get("sinceIso") || "";
+        if (urlParams.has("untilIso")) $("until").value = urlParams.get("untilIso") || "";
+        if (urlParams.has("autoEvery")) $("autoEvery").value = urlParams.get("autoEvery") || "0";
+        if (urlParams.has("useQuery")) $("useQuery").checked = (urlParams.get("useQuery") === "1");
+      }
+
+      async function loadApps() {
+        try {
+          const wanted = $("app").value || "";
+          const res = await fetch("/api/apps?limit=2000", { headers: { "Accept": "application/json" } });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!Array.isArray(data)) return;
+
+          const sel = $("app");
+          const anyOpt = sel.querySelector("option[value='']");
+          sel.innerHTML = "";
+          sel.appendChild(anyOpt || new Option("(any)", ""));
+
+          for (const it of data) {
+            const name = (it && it.app) ? String(it.app) : "";
+            if (!name) continue;
+            const cnt = (it && Number.isFinite(it.count)) ? it.count : null;
+            const label = (cnt != null) ? `${name} (${cnt})` : name;
+            const opt = new Option(label, name);
+            sel.appendChild(opt);
+          }
+
+          sel.value = wanted;
+          if (wanted && sel.value !== wanted) sel.value = "";
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      function buildApiUrl() {
+        const p = paramsFromUI();
+        const useQuery = $("useQuery").checked;
+        const sp = new URLSearchParams();
+        sp.set("limit", String(p.limit));
+        if (p.app) sp.set("app", p.app);
+        if (p.level) sp.set("level", p.level);
+        if (useQuery) {
+          if (p.contains) sp.set("contains", p.contains);
+          if (p.traceId) sp.set("traceId", p.traceId);
+          if (p.since != null) sp.set("since", String(p.since));
+          if (p.until != null) sp.set("until", String(p.until));
+          return "/api/query?" + sp.toString();
+        }
+        return "/api/recent?" + sp.toString();
+      }
+
+      function render(rows) {
+        const root = $("rows");
+        root.innerHTML = "";
+        for (const r of rows) {
+          const lvl = String(r.level || "debug");
+          const trace = r.traceId || "";
+          const fields = r.fields ? JSON.stringify(r.fields) : "";
+          const msg = r.message + (fields ? "\n" + fields : "");
+
+          const row = document.createElement("div");
+          row.className = "trow";
+          row.innerHTML = `
+            <div class="mono">${fmtTs(r.ts)}</div>
+            <div><span class="${lvlClass(lvl)}">${lvl}</span></div>
+            <div class="col-app mono">${escapeHtml(r.app || "")}</div>
+            <div class="msg">${escapeHtml(msg || "")}</div>
+            <div class="col-trace mono">${escapeHtml(trace)}</div>
+          `;
+          root.appendChild(row);
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadOnce() {
+        const url = buildApiUrl();
+        $("btnLoad").disabled = true;
+        showError("");
+        const started = performance.now();
+        try {
+          const res = await fetch(url, { headers: { "Accept": "application/json" } });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+          }
+          const data = await res.json();
+          render(Array.isArray(data) ? data : []);
+          state.lastCount = Array.isArray(data) ? data.length : 0;
+          state.lastLoadAt = Date.now();
+          const ms = Math.round(performance.now() - started);
+          $("status").textContent = `loaded ${state.lastCount} rows in ${ms}ms via ${url}`;
+        } catch (e) {
+          showError(String(e && e.message ? e.message : e));
+          $("status").textContent = "load failed";
+        } finally {
+          $("btnLoad").disabled = false;
+        }
+      }
+
+      function clearTable() {
+        $("rows").innerHTML = "";
+        $("status").textContent = "cleared";
+        showError("");
+      }
+
+      function updateAuto() {
+        if (state.timer) {
+          clearInterval(state.timer);
+          state.timer = null;
+        }
+        const every = parseInt($("autoEvery").value || "0", 10);
+        if (every > 0) {
+          state.timer = setInterval(loadOnce, every);
+        }
+      }
+
+      function copyLink() {
+        const p = paramsFromUI();
+        const sp = new URLSearchParams();
+        if (p.app) sp.set("app", p.app);
+        if (p.level) sp.set("level", p.level);
+        if (p.contains) sp.set("contains", p.contains);
+        if (p.traceId) sp.set("traceId", p.traceId);
+        sp.set("limit", String(p.limit));
+        if ($("since").value) sp.set("sinceIso", $("since").value);
+        if ($("until").value) sp.set("untilIso", $("until").value);
+        sp.set("autoEvery", $("autoEvery").value);
+        sp.set("useQuery", $("useQuery").checked ? "1" : "0");
+        const url = location.origin + location.pathname + "?" + sp.toString();
+        navigator.clipboard.writeText(url).then(
+          () => { $("status").textContent = "copied link to clipboard"; },
+          () => { $("status").textContent = "failed to copy"; }
+        );
+      }
+
+      // wire
+      $("btnLoad").addEventListener("click", loadOnce);
+      $("btnClear").addEventListener("click", clearTable);
+      $("btnCopyLink").addEventListener("click", copyLink);
+      $("autoEvery").addEventListener("change", updateAuto);
+
+      // init from URL
+      setUIFromParams(new URLSearchParams(location.search));
+      loadApps();
+      updateAuto();
+      loadOnce();
+    </script>
+  </body>
+</html>
+

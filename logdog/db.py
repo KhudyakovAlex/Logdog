@@ -210,6 +210,24 @@ class LogdogDB:
 
         return [self._row_to_log(r) for r in rows]
 
+    def apps(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 5000))
+        with self._lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """
+                SELECT app, COUNT(*) AS cnt, MAX(ts) AS last_ts
+                FROM logs
+                GROUP BY app
+                ORDER BY last_ts DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cur.fetchall()
+
+        return [{"app": str(r["app"]), "count": int(r["cnt"]), "lastTs": int(r["last_ts"])} for r in rows]
+
     def maybe_enforce_retention(self) -> None:
         now = time.time()
         if (now - self._last_retention_at) < self._retention_check_interval_s:

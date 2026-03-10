@@ -51,3 +51,9 @@ class LogOut(BaseModel):
     traceId: Optional[str] = None
     fields: Optional[dict[str, Any]] = None
 
+
+class AppInfo(BaseModel):
+    app: str
+    count: int
+    lastTs: int
+
