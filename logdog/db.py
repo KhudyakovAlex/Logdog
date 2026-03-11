@@ -228,6 +228,21 @@ class LogdogDB:
 
         return [{"app": str(r["app"]), "count": int(r["cnt"]), "lastTs": int(r["last_ts"])} for r in rows]
 
+    def purge(self) -> int:
+        with self._lock:
+            cur = self._conn.cursor()
+            cur.execute("SELECT COUNT(*) AS cnt FROM logs;")
+            before = int(cur.fetchone()[0])
+            cur.execute("DELETE FROM logs;")
+            self._conn.commit()
+
+            # Try to shrink file(s): checkpoint WAL and incremental vacuum.
+            cur.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            cur.execute("PRAGMA incremental_vacuum(2000);")
+            self._conn.commit()
+
+        return before
+
     def maybe_enforce_retention(self) -> None:
         now = time.time()
         if (now - self._last_retention_at) < self._retention_check_interval_s:

@@ -285,11 +285,30 @@
         const d = new Date(ms);
         if (isNaN(d.getTime())) return String(ms);
         const pad = (n) => String(n).padStart(2, "0");
-        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        const pad3 = (n) => String(n).padStart(3, "0");
+        return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
       }
 
       function lvlClass(lvl) {
         return `pill mono lvl-${String(lvl || "debug")}`;
+      }
+
+      function chatWho(r) {
+        const f = (r && r.fields) ? r.fields : null;
+        const raw = f ? (f.role ?? f.speaker ?? f.from ?? null) : null;
+        if (!raw) return null;
+        const v = String(raw).trim().toLowerCase();
+        if (v === "user" || v === "human") return "USER";
+        if (v === "assistant" || v === "ai" || v === "llm") return "LLM";
+        return null;
+      }
+
+      function chatText(r) {
+        const f = (r && r.fields) ? r.fields : null;
+        const t = f ? (f.text ?? f.content ?? f.prompt ?? f.response ?? null) : null;
+        if (t == null) return null;
+        const s = String(t);
+        return s.trim() ? s : null;
       }
 
       function showError(msg) {
@@ -381,8 +400,10 @@
         for (const r of rows) {
           const lvl = String(r.level || "debug");
           const trace = r.traceId || "";
-          const fields = r.fields ? JSON.stringify(r.fields) : "";
-          const msg = r.message + (fields ? "\n" + fields : "");
+          const who = chatWho(r);
+          const chat = who ? (chatText(r) || r.message) : null;
+          const fields = (!who && r.fields) ? JSON.stringify(r.fields) : "";
+          const msg = who ? (`${who}:\n${chat}`) : (r.message + (fields ? "\n" + fields : ""));
 
           const row = document.createElement("div");
           row.className = "trow";
@@ -431,10 +452,26 @@
         }
       }
 
-      function clearTable() {
-        $("rows").innerHTML = "";
-        $("status").textContent = "cleared";
+      async function purgeLogs() {
+        $("btnClear").disabled = true;
         showError("");
+        try {
+          const res = await fetch("/api/purge", { method: "POST" });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+          }
+          const data = await res.json().catch(() => ({}));
+          const deleted = (data && Number.isFinite(data.deleted)) ? data.deleted : null;
+          $("rows").innerHTML = "";
+          await loadApps();
+          $("status").textContent = deleted != null ? `purged ${deleted} rows` : "purged";
+        } catch (e) {
+          showError(String(e && e.message ? e.message : e));
+          $("status").textContent = "purge failed";
+        } finally {
+          $("btnClear").disabled = false;
+        }
       }
 
       function updateAuto() {
@@ -469,7 +506,7 @@
 
       // wire
       $("btnLoad").addEventListener("click", loadOnce);
-      $("btnClear").addEventListener("click", clearTable);
+      $("btnClear").addEventListener("click", purgeLogs);
       $("btnCopyLink").addEventListener("click", copyLink);
       $("autoEvery").addEventListener("change", updateAuto);
 

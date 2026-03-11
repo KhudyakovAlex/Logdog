@@ -110,3 +110,9 @@ def api_apps(limit: int = 500) -> list[AppInfo]:
     rows = db.apps(limit=limit)
     return [AppInfo.model_validate(r) for r in rows]
 
+
+@app.post("/api/purge")
+def api_purge() -> dict[str, int]:
+    deleted = db.purge()
+    return {"deleted": int(deleted)}
+
