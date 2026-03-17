@@ -159,6 +159,168 @@
         word-break: break-word;
         line-height: 1.35;
       }
+      .msg-text {
+        white-space: pre-wrap;
+      }
+      .attachment-list {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .attachment-link {
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 12%, #0a1326);
+        border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+        color: var(--text);
+        font-size: 16px;
+      }
+      .attachment-link:hover {
+        border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
+      }
+      .viewer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: color-mix(in srgb, black 55%, transparent);
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+        padding: 20px;
+        z-index: 20;
+      }
+      .viewer {
+        width: min(1200px, 100%);
+        height: min(92vh, 100%);
+        background: color-mix(in srgb, var(--panel) 96%, black);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 18px 80px rgba(0, 0, 0, 0.45);
+      }
+      .viewer-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+      }
+      .viewer-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .viewer-meta {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .viewer-body {
+        padding: 14px;
+        overflow: auto;
+        flex: 1;
+      }
+      .viewer-empty {
+        color: var(--muted);
+      }
+      .viewer-pre {
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #0a1326;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+      .json-node {
+        margin-left: 12px;
+      }
+      .json-node details {
+        margin: 4px 0;
+      }
+      .json-node summary {
+        cursor: pointer;
+        color: var(--text);
+      }
+      .json-children {
+        margin-left: 16px;
+        padding-left: 10px;
+        border-left: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+      }
+      .json-key {
+        color: var(--accent);
+      }
+      .json-value-string {
+        color: #9fe870;
+      }
+      .json-value-number {
+        color: #ffd166;
+      }
+      .json-value-bool {
+        color: #7fd1ff;
+      }
+      .json-value-null {
+        color: var(--muted);
+      }
+      .markdown-view {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .markdown-section {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: color-mix(in srgb, #0a1326 92%, transparent);
+      }
+      .markdown-section summary {
+        cursor: pointer;
+        padding: 10px 12px;
+        font-weight: 700;
+      }
+      .markdown-section-body {
+        padding: 0 12px 12px;
+      }
+      .markdown-section-body > *:first-child {
+        margin-top: 0;
+      }
+      .markdown-section-body > *:last-child {
+        margin-bottom: 0;
+      }
+      .markdown-view h1, .markdown-view h2, .markdown-view h3, .markdown-view h4, .markdown-view h5, .markdown-view h6 {
+        margin: 18px 0 10px;
+      }
+      .markdown-view p, .markdown-view ul, .markdown-view ol, .markdown-view blockquote {
+        margin: 10px 0;
+      }
+      .markdown-view code {
+        font-family: var(--mono);
+        background: color-mix(in srgb, #0a1326 86%, transparent);
+        padding: 1px 5px;
+        border-radius: 6px;
+      }
+      .markdown-view pre {
+        margin: 10px 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #081120;
+        overflow: auto;
+      }
+      .markdown-view pre code {
+        background: transparent;
+        padding: 0;
+      }
+      .markdown-view blockquote {
+        padding-left: 12px;
+        border-left: 3px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+        color: color-mix(in srgb, var(--text) 90%, var(--muted));
+      }
       .pill {
         display: inline-flex;
         align-items: center;
@@ -197,7 +359,7 @@
       <header>
         <div>
           <h1>Logdog UI</h1>
-          <div class="sub">Просмотр логов из SQLite через HTTP API: <span class="mono">/api/recent</span>, <span class="mono">/api/query</span></div>
+          <div class="sub">Просмотр логов и вложений из SQLite через HTTP API: <span class="mono">/api/recent</span>, <span class="mono">/api/query</span>, <span class="mono">/api/attachments/{id}</span></div>
         </div>
         <div class="sub">Ingest: <span class="mono">POST /logs</span></div>
       </header>
@@ -221,8 +383,8 @@
             </select>
           </div>
           <div class="grid-4">
-            <label>Contains (message)</label>
-            <input id="contains" placeholder="подстрока в message" />
+            <label>Contains</label>
+            <input id="contains" placeholder="подстрока в message / attachment" />
           </div>
           <div class="grid-3">
             <label>TraceId</label>
@@ -284,11 +446,36 @@
         </div>
         <div id="rows"></div>
       </div>
+
+      <div class="viewer-backdrop" id="viewerBackdrop" hidden>
+        <div class="viewer">
+          <div class="viewer-head">
+            <div>
+              <div class="viewer-title" id="viewerTitle">Attachment</div>
+              <div class="viewer-meta mono" id="viewerMeta"></div>
+            </div>
+            <div class="btns">
+              <button class="primary" id="viewerFormattedBtn">Formatted</button>
+              <button id="viewerRawBtn">Raw</button>
+              <button id="viewerCloseBtn">Close</button>
+            </div>
+          </div>
+          <div class="viewer-body" id="viewerBody"></div>
+        </div>
+      </div>
     </div>
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const state = { timer: null, lastCount: 0, lastLoadAt: 0, rows: [] };
+      const state = {
+        timer: null,
+        lastCount: 0,
+        lastLoadAt: 0,
+        rows: [],
+        attachmentCache: new Map(),
+        currentAttachment: null,
+        viewerMode: "formatted",
+      };
 
       function toMsFromDateTimeLocal(v) {
         if (!v) return null;
@@ -303,6 +490,14 @@
         const pad = (n) => String(n).padStart(2, "0");
         const pad3 = (n) => String(n).padStart(3, "0");
         return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad3(d.getMilliseconds())}`;
+      }
+
+      function fmtBytes(n) {
+        const v = Number(n);
+        if (!Number.isFinite(v) || v < 0) return "0 B";
+        if (v < 1024) return `${v} B`;
+        if (v < 1024 * 1024) return `${(v / 1024).toFixed(1)} KB`;
+        return `${(v / (1024 * 1024)).toFixed(2)} MB`;
       }
 
       function lvlClass(lvl) {
@@ -415,30 +610,6 @@
         return "/api/recent?" + sp.toString();
       }
 
-      function render(rows) {
-        const root = $("rows");
-        root.innerHTML = "";
-        for (const r of rows) {
-          const lvl = String(r.level || "debug");
-          const trace = r.traceId || "";
-          const who = chatWho(r);
-          const chat = who ? (chatText(r) || r.message) : null;
-          const fields = (showSystemInfoEnabled() && !who && r.fields) ? JSON.stringify(r.fields) : "";
-          const msg = who ? (`${who}:\n${chat}`) : (r.message + (fields ? "\n" + fields : ""));
-
-          const row = document.createElement("div");
-          row.className = "trow";
-          row.innerHTML = `
-            <div class="mono">${fmtTs(r.ts)}</div>
-            <div><span class="${lvlClass(lvl)}">${lvl}</span></div>
-            <div class="col-app mono">${escapeHtml(r.app || "")}</div>
-            <div class="msg">${escapeHtml(msg || "")}</div>
-            <div class="col-trace mono">${escapeHtml(trace)}</div>
-          `;
-          root.appendChild(row);
-        }
-      }
-
       function escapeHtml(s) {
         return String(s)
           .replaceAll("&", "&amp;")
@@ -446,6 +617,401 @@
           .replaceAll(">", "&gt;")
           .replaceAll("\"", "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      function updateViewerButtons() {
+        $("viewerFormattedBtn").disabled = state.viewerMode === "formatted";
+        $("viewerRawBtn").disabled = state.viewerMode === "raw";
+      }
+
+      function closeViewer() {
+        $("viewerBackdrop").hidden = true;
+        $("viewerBody").innerHTML = "";
+        $("viewerMeta").textContent = "";
+        state.currentAttachment = null;
+      }
+
+      function setViewerLoading(title, meta) {
+        $("viewerBackdrop").hidden = false;
+        $("viewerTitle").textContent = title;
+        $("viewerMeta").textContent = meta || "";
+        $("viewerBody").innerHTML = "";
+        const msg = document.createElement("div");
+        msg.className = "viewer-empty";
+        msg.textContent = "loading...";
+        $("viewerBody").appendChild(msg);
+      }
+
+      function setViewerMode(mode) {
+        state.viewerMode = mode === "raw" ? "raw" : "formatted";
+        updateViewerButtons();
+        renderCurrentAttachment();
+      }
+
+      async function openAttachment(id) {
+        const attachmentId = parseInt(String(id), 10);
+        if (!Number.isFinite(attachmentId) || attachmentId <= 0) return;
+
+        state.viewerMode = "formatted";
+        updateViewerButtons();
+
+        const cached = state.attachmentCache.get(attachmentId);
+        if (cached) {
+          state.currentAttachment = cached;
+          $("viewerBackdrop").hidden = false;
+          renderCurrentAttachment();
+          return;
+        }
+
+        setViewerLoading("Attachment", `#${attachmentId}`);
+        try {
+          const res = await fetch(`/api/attachments/${attachmentId}`, { headers: { "Accept": "application/json" } });
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+          }
+          const data = await res.json();
+          state.attachmentCache.set(attachmentId, data);
+          state.currentAttachment = data;
+          renderCurrentAttachment();
+        } catch (e) {
+          $("viewerBody").innerHTML = "";
+          const msg = document.createElement("div");
+          msg.className = "viewer-empty";
+          msg.textContent = String(e && e.message ? e.message : e);
+          $("viewerBody").appendChild(msg);
+        }
+      }
+
+      function renderCurrentAttachment() {
+        const att = state.currentAttachment;
+        if (!att) return;
+
+        $("viewerBackdrop").hidden = false;
+        $("viewerTitle").textContent = att.name || `Attachment #${att.id}`;
+        $("viewerMeta").textContent = `${String(att.kind || "").toUpperCase()}  ${fmtBytes(att.sizeBytes)}  log:${att.logId}`;
+        updateViewerButtons();
+
+        const body = $("viewerBody");
+        body.innerHTML = "";
+
+        if (state.viewerMode === "raw") {
+          const pre = document.createElement("pre");
+          pre.className = "viewer-pre mono";
+          pre.textContent = String(att.content || "");
+          body.appendChild(pre);
+          return;
+        }
+
+        if (att.kind === "json") {
+          body.appendChild(renderJsonAttachment(att));
+          return;
+        }
+
+        body.appendChild(renderMarkdownAttachment(att));
+      }
+
+      function renderJsonAttachment(att) {
+        try {
+          const parsed = JSON.parse(String(att.content || ""));
+          const root = document.createElement("div");
+          root.className = "json-node mono";
+          root.appendChild(renderJsonNode(parsed, null, 0));
+          return root;
+        } catch (e) {
+          const wrap = document.createElement("div");
+          const msg = document.createElement("div");
+          msg.className = "viewer-empty";
+          msg.textContent = `failed to parse json: ${String(e && e.message ? e.message : e)}`;
+          wrap.appendChild(msg);
+          const pre = document.createElement("pre");
+          pre.className = "viewer-pre mono";
+          pre.textContent = String(att.content || "");
+          wrap.appendChild(pre);
+          return wrap;
+        }
+      }
+
+      function renderJsonNode(value, key, depth) {
+        const isObject = value !== null && typeof value === "object";
+        const node = document.createElement("div");
+        node.className = "json-node";
+
+        if (!isObject) {
+          const line = document.createElement("div");
+          if (key != null) {
+            const keyEl = document.createElement("span");
+            keyEl.className = "json-key";
+            keyEl.textContent = `${key}: `;
+            line.appendChild(keyEl);
+          }
+          const valueEl = document.createElement("span");
+          if (typeof value === "string") {
+            valueEl.className = "json-value-string";
+            valueEl.textContent = `"${value}"`;
+          } else if (typeof value === "number") {
+            valueEl.className = "json-value-number";
+            valueEl.textContent = String(value);
+          } else if (typeof value === "boolean") {
+            valueEl.className = "json-value-bool";
+            valueEl.textContent = String(value);
+          } else {
+            valueEl.className = "json-value-null";
+            valueEl.textContent = "null";
+          }
+          line.appendChild(valueEl);
+          node.appendChild(line);
+          return node;
+        }
+
+        const isArray = Array.isArray(value);
+        const entries = isArray ? value.map((item, index) => [index, item]) : Object.entries(value);
+        const details = document.createElement("details");
+        details.open = depth < 1;
+
+        const summary = document.createElement("summary");
+        const label = [];
+        if (key != null) label.push(`${key}: `);
+        label.push(isArray ? `Array(${entries.length})` : `Object(${entries.length})`);
+        summary.textContent = label.join("");
+        details.appendChild(summary);
+
+        const children = document.createElement("div");
+        children.className = "json-children";
+        if (!entries.length) {
+          const empty = document.createElement("div");
+          empty.className = "json-value-null";
+          empty.textContent = isArray ? "[]" : "{}";
+          children.appendChild(empty);
+        } else {
+          for (const [childKey, childValue] of entries) {
+            children.appendChild(renderJsonNode(childValue, childKey, depth + 1));
+          }
+        }
+        details.appendChild(children);
+        node.appendChild(details);
+        return node;
+      }
+
+      function renderMarkdownAttachment(att) {
+        const markdown = String(att.content || "");
+        const root = document.createElement("div");
+        root.className = "markdown-view";
+
+        for (const section of splitMarkdownSections(markdown)) {
+          const details = document.createElement("details");
+          details.className = "markdown-section";
+          details.open = section.index === 0;
+
+          const summary = document.createElement("summary");
+          summary.textContent = section.title;
+          details.appendChild(summary);
+
+          const body = document.createElement("div");
+          body.className = "markdown-section-body";
+          body.appendChild(renderMarkdownBlocks(section.lines));
+          details.appendChild(body);
+          root.appendChild(details);
+        }
+
+        return root;
+      }
+
+      function splitMarkdownSections(markdown) {
+        const lines = String(markdown || "").split(/\r?\n/);
+        const sections = [];
+        let current = null;
+
+        function pushCurrent() {
+          if (current && current.lines.length) {
+            current.index = sections.length;
+            sections.push(current);
+          }
+        }
+
+        for (const line of lines) {
+          const m = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+          if (m) {
+            pushCurrent();
+            current = { title: m[2].trim(), lines: [] };
+            continue;
+          }
+          if (!current) current = { title: "Document", lines: [] };
+          current.lines.push(line);
+        }
+        pushCurrent();
+
+        if (!sections.length) {
+          sections.push({ index: 0, title: "Document", lines: lines });
+        }
+        return sections;
+      }
+
+      function renderMarkdownBlocks(lines) {
+        const root = document.createDocumentFragment();
+        const all = Array.isArray(lines) ? lines : [];
+        let i = 0;
+
+        function appendParagraph(parts) {
+          const p = document.createElement("p");
+          p.innerHTML = parts.map((part) => renderInlineMarkdown(part)).join("<br>");
+          root.appendChild(p);
+        }
+
+        while (i < all.length) {
+          const line = all[i];
+
+          if (!line.trim()) {
+            i += 1;
+            continue;
+          }
+
+          if (/^```/.test(line)) {
+            i += 1;
+            const block = [];
+            while (i < all.length && !/^```/.test(all[i])) {
+              block.push(all[i]);
+              i += 1;
+            }
+            if (i < all.length) i += 1;
+            const pre = document.createElement("pre");
+            const code = document.createElement("code");
+            code.className = "mono";
+            code.textContent = block.join("\n");
+            pre.appendChild(code);
+            root.appendChild(pre);
+            continue;
+          }
+
+          if (/^\s*>\s?/.test(line)) {
+            const quoteLines = [];
+            while (i < all.length && /^\s*>\s?/.test(all[i])) {
+              quoteLines.push(all[i].replace(/^\s*>\s?/, ""));
+              i += 1;
+            }
+            const blockquote = document.createElement("blockquote");
+            blockquote.innerHTML = quoteLines.map((part) => renderInlineMarkdown(part)).join("<br>");
+            root.appendChild(blockquote);
+            continue;
+          }
+
+          if (/^\s*[-*]\s+/.test(line)) {
+            const ul = document.createElement("ul");
+            while (i < all.length && /^\s*[-*]\s+/.test(all[i])) {
+              const li = document.createElement("li");
+              li.innerHTML = renderInlineMarkdown(all[i].replace(/^\s*[-*]\s+/, ""));
+              ul.appendChild(li);
+              i += 1;
+            }
+            root.appendChild(ul);
+            continue;
+          }
+
+          if (/^\s*\d+\.\s+/.test(line)) {
+            const ol = document.createElement("ol");
+            while (i < all.length && /^\s*\d+\.\s+/.test(all[i])) {
+              const li = document.createElement("li");
+              li.innerHTML = renderInlineMarkdown(all[i].replace(/^\s*\d+\.\s+/, ""));
+              ol.appendChild(li);
+              i += 1;
+            }
+            root.appendChild(ol);
+            continue;
+          }
+
+          const paragraph = [];
+          while (
+            i < all.length &&
+            all[i].trim() &&
+            !/^```/.test(all[i]) &&
+            !/^\s*>\s?/.test(all[i]) &&
+            !/^\s*[-*]\s+/.test(all[i]) &&
+            !/^\s*\d+\.\s+/.test(all[i])
+          ) {
+            paragraph.push(all[i]);
+            i += 1;
+          }
+          appendParagraph(paragraph);
+        }
+
+        const wrap = document.createElement("div");
+        wrap.appendChild(root);
+        return wrap;
+      }
+
+      function renderInlineMarkdown(text) {
+        let html = escapeHtml(text);
+        html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_m, label, href) => {
+          return `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${label}</a>`;
+        });
+        html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+        html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+        return html;
+      }
+
+      function render(rows) {
+        const root = $("rows");
+        root.innerHTML = "";
+
+        for (const r of rows) {
+          const lvl = String(r.level || "debug");
+          const trace = r.traceId || "";
+          const who = chatWho(r);
+          const chat = who ? (chatText(r) || r.message) : null;
+          const fields = (showSystemInfoEnabled() && !who && r.fields) ? JSON.stringify(r.fields) : "";
+          const msg = who ? (`${who}:\n${chat}`) : (r.message + (fields ? "\n" + fields : ""));
+          const attachments = Array.isArray(r.attachments) ? r.attachments : [];
+
+          const row = document.createElement("div");
+          row.className = "trow";
+
+          const timeEl = document.createElement("div");
+          timeEl.className = "mono";
+          timeEl.textContent = fmtTs(r.ts);
+
+          const levelEl = document.createElement("div");
+          const levelPill = document.createElement("span");
+          levelPill.className = lvlClass(lvl);
+          levelPill.textContent = lvl;
+          levelEl.appendChild(levelPill);
+
+          const appEl = document.createElement("div");
+          appEl.className = "col-app mono";
+          appEl.textContent = String(r.app || "");
+
+          const msgEl = document.createElement("div");
+          msgEl.className = "msg";
+          const msgTextEl = document.createElement("div");
+          msgTextEl.className = "msg-text";
+          msgTextEl.textContent = msg || "";
+          msgEl.appendChild(msgTextEl);
+
+          if (attachments.length) {
+            const list = document.createElement("div");
+            list.className = "attachment-list";
+            for (const a of attachments) {
+              const btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "attachment-link mono";
+              btn.textContent = `${String(a.name || "attachment")} [${String(a.kind || "").toUpperCase()} ${fmtBytes(a.sizeBytes)}]`;
+              btn.addEventListener("click", () => openAttachment(a.id));
+              list.appendChild(btn);
+            }
+            msgEl.appendChild(list);
+          }
+
+          const traceEl = document.createElement("div");
+          traceEl.className = "col-trace mono";
+          traceEl.textContent = trace;
+
+          row.appendChild(timeEl);
+          row.appendChild(levelEl);
+          row.appendChild(appEl);
+          row.appendChild(msgEl);
+          row.appendChild(traceEl);
+          root.appendChild(row);
+        }
       }
 
       async function loadOnce() {
@@ -485,7 +1051,10 @@
           }
           const data = await res.json().catch(() => ({}));
           const deleted = (data && Number.isFinite(data.deleted)) ? data.deleted : null;
+          state.rows = [];
+          state.attachmentCache.clear();
           $("rows").innerHTML = "";
+          closeViewer();
           await loadApps();
           $("status").textContent = deleted != null ? `purged ${deleted} rows` : "purged";
         } catch (e) {
@@ -527,15 +1096,23 @@
         );
       }
 
-      // wire
       $("btnLoad").addEventListener("click", loadOnce);
       $("btnClear").addEventListener("click", purgeLogs);
       $("btnCopyLink").addEventListener("click", copyLink);
       $("autoEvery").addEventListener("change", updateAuto);
       $("showSystemInfo").addEventListener("change", () => render(state.rows));
+      $("viewerCloseBtn").addEventListener("click", closeViewer);
+      $("viewerFormattedBtn").addEventListener("click", () => setViewerMode("formatted"));
+      $("viewerRawBtn").addEventListener("click", () => setViewerMode("raw"));
+      $("viewerBackdrop").addEventListener("click", (e) => {
+        if (e.target === $("viewerBackdrop")) closeViewer();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !$("viewerBackdrop").hidden) closeViewer();
+      });
 
-      // init from URL
       setUIFromParams(new URLSearchParams(location.search));
+      updateViewerButtons();
       loadApps();
       updateAuto();
       loadOnce();

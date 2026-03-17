@@ -22,6 +22,24 @@ def _db_total_bytes(db_path: Path) -> int:
 
 
 @dataclass(frozen=True)
+class AttachmentRefRow:
+    id: int
+    kind: str
+    name: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class AttachmentRow:
+    id: int
+    log_id: int
+    kind: str
+    name: str
+    content: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
 class LogRow:
     id: int
     ts: int
@@ -30,6 +48,7 @@ class LogRow:
     message: str
     trace_id: Optional[str]
     fields: Optional[dict[str, Any]]
+    attachments: list[AttachmentRefRow]
 
 
 class LogdogDB:
@@ -87,10 +106,24 @@ class LogdogDB:
             );
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS log_attachments (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              log_id INTEGER NOT NULL,
+              kind TEXT NOT NULL,
+              name TEXT NOT NULL,
+              content_text TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              FOREIGN KEY(log_id) REFERENCES logs(id) ON DELETE CASCADE
+            );
+            """
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_app_ts ON logs(app, ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_level_ts ON logs(level, ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_trace_id ON logs(trace_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_log_attachments_log_id ON log_attachments(log_id);")
         self._conn.commit()
 
     def insert(
@@ -102,9 +135,11 @@ class LogdogDB:
         ts: Optional[int] = None,
         trace_id: Optional[str] = None,
         fields: Optional[dict[str, Any]] = None,
+        attachments: Optional[list[dict[str, Any]]] = None,
     ) -> LogRow:
         ts_ms = int(ts) if ts is not None else _now_ms()
         fields_json = json.dumps(fields, ensure_ascii=False) if fields is not None else None
+        attachment_rows: list[AttachmentRefRow] = []
 
         with self._lock:
             cur = self._conn.cursor()
@@ -116,6 +151,24 @@ class LogdogDB:
                 (ts_ms, level, app, message, trace_id, fields_json),
             )
             log_id = int(cur.lastrowid)
+            for attachment in attachments or []:
+                content = str(attachment["content"])
+                size_bytes = len(content.encode("utf-8"))
+                cur.execute(
+                    """
+                    INSERT INTO log_attachments(log_id, kind, name, content_text, size_bytes)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (log_id, str(attachment["kind"]), str(attachment["name"]), content, size_bytes),
+                )
+                attachment_rows.append(
+                    AttachmentRefRow(
+                        id=int(cur.lastrowid),
+                        kind=str(attachment["kind"]),
+                        name=str(attachment["name"]),
+                        size_bytes=size_bytes,
+                    )
+                )
             self._conn.commit()
 
         self.maybe_enforce_retention()
@@ -128,6 +181,7 @@ class LogdogDB:
             message=message,
             trace_id=trace_id,
             fields=fields,
+            attachments=attachment_rows,
         )
 
     def recent(self, *, limit: int = 100, app: Optional[str] = None, level: Optional[str] = None) -> list[LogRow]:
@@ -156,7 +210,7 @@ class LogdogDB:
             )
             rows = cur.fetchall()
 
-        return [self._row_to_log(r) for r in rows]
+        return self._rows_to_logs(rows)
 
     def query(
         self,
@@ -189,8 +243,14 @@ class LogdogDB:
             where.append("trace_id = ?")
             params.append(trace_id)
         if contains:
-            where.append("message LIKE ?")
-            params.append(f"%{contains}%")
+            like = f"%{contains}%"
+            where.append(
+                "(message LIKE ? OR EXISTS ("
+                "SELECT 1 FROM log_attachments a "
+                "WHERE a.log_id = logs.id AND (a.name LIKE ? OR a.content_text LIKE ?)"
+                "))"
+            )
+            params.extend([like, like, like])
 
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
@@ -208,7 +268,7 @@ class LogdogDB:
             )
             rows = cur.fetchall()
 
-        return [self._row_to_log(r) for r in rows]
+        return self._rows_to_logs(rows)
 
     def apps(self, *, limit: int = 500) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 5000))
@@ -227,6 +287,31 @@ class LogdogDB:
             rows = cur.fetchall()
 
         return [{"app": str(r["app"]), "count": int(r["cnt"]), "lastTs": int(r["last_ts"])} for r in rows]
+
+    def attachment(self, attachment_id: int) -> Optional[AttachmentRow]:
+        with self._lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                """
+                SELECT id, log_id, kind, name, content_text, size_bytes
+                FROM log_attachments
+                WHERE id = ?
+                """,
+                (int(attachment_id),),
+            )
+            row = cur.fetchone()
+
+        if row is None:
+            return None
+
+        return AttachmentRow(
+            id=int(row["id"]),
+            log_id=int(row["log_id"]),
+            kind=str(row["kind"]),
+            name=str(row["name"]),
+            content=str(row["content_text"]),
+            size_bytes=int(row["size_bytes"]),
+        )
 
     def purge(self) -> int:
         with self._lock:
@@ -301,8 +386,43 @@ class LogdogDB:
             self._conn.commit()
             return int(cur.rowcount)
 
+    def _rows_to_logs(self, rows: Iterable[sqlite3.Row]) -> list[LogRow]:
+        row_list = list(rows)
+        attachments_by_log = self._attachment_refs_by_log_id(int(r["id"]) for r in row_list)
+        return [self._row_to_log(r, attachments_by_log.get(int(r["id"]), [])) for r in row_list]
+
+    def _attachment_refs_by_log_id(self, log_ids: Iterable[int]) -> dict[int, list[AttachmentRefRow]]:
+        unique_ids = [int(i) for i in dict.fromkeys(int(i) for i in log_ids)]
+        if not unique_ids:
+            return {}
+
+        with self._lock:
+            cur = self._conn.cursor()
+            cur.execute(
+                f"""
+                SELECT id, log_id, kind, name, size_bytes
+                FROM log_attachments
+                WHERE log_id IN ({','.join('?' for _ in unique_ids)})
+                ORDER BY id ASC
+                """,
+                unique_ids,
+            )
+            rows = cur.fetchall()
+
+        result: dict[int, list[AttachmentRefRow]] = {log_id: [] for log_id in unique_ids}
+        for r in rows:
+            result.setdefault(int(r["log_id"]), []).append(
+                AttachmentRefRow(
+                    id=int(r["id"]),
+                    kind=str(r["kind"]),
+                    name=str(r["name"]),
+                    size_bytes=int(r["size_bytes"]),
+                )
+            )
+        return result
+
     @staticmethod
-    def _row_to_log(r: sqlite3.Row) -> LogRow:
+    def _row_to_log(r: sqlite3.Row, attachments: list[AttachmentRefRow]) -> LogRow:
         fields_raw = r["fields_json"]
         fields = json.loads(fields_raw) if fields_raw else None
         return LogRow(
@@ -313,5 +433,6 @@ class LogdogDB:
             message=str(r["message"]),
             trace_id=str(r["trace_id"]) if r["trace_id"] is not None else None,
             fields=fields,
+            attachments=attachments,
         )
 

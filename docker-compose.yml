@@ -8,6 +8,6 @@ services:
     environment:
       LOGDOG_DB_PATH: /data/logdog.db
       LOGDOG_DB_MAX_BYTES: "1073741824"
-      LOGDOG_HTTP_MAX_BYTES: "262144"
+      LOGDOG_HTTP_MAX_BYTES: "4194304"
     volumes:
       - ./data:/data

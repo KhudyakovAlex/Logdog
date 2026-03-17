@@ -31,7 +31,7 @@ def _connect_readonly(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
+def _row_to_dict(r: sqlite3.Row, attachments: list[dict[str, Any]]) -> dict[str, Any]:
     fields_raw = r["fields_json"]
     fields = json.loads(fields_raw) if fields_raw else None
     return {
@@ -42,7 +42,37 @@ def _row_to_dict(r: sqlite3.Row) -> dict[str, Any]:
         "message": str(r["message"]),
         "traceId": str(r["trace_id"]) if r["trace_id"] is not None else None,
         "fields": fields,
+        "attachments": attachments,
     }
+
+
+def _attachment_refs_by_log_id(conn: sqlite3.Connection, log_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    unique_ids = [int(i) for i in dict.fromkeys(log_ids)]
+    if not unique_ids:
+        return {}
+
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT id, log_id, kind, name, size_bytes
+        FROM log_attachments
+        WHERE log_id IN ({','.join('?' for _ in unique_ids)})
+        ORDER BY id ASC
+        """,
+        unique_ids,
+    )
+
+    result: dict[int, list[dict[str, Any]]] = {log_id: [] for log_id in unique_ids}
+    for r in cur.fetchall():
+        result.setdefault(int(r["log_id"]), []).append(
+            {
+                "id": int(r["id"]),
+                "kind": str(r["kind"]),
+                "name": str(r["name"]),
+                "sizeBytes": int(r["size_bytes"]),
+            }
+        )
+    return result
 
 
 def _select(
@@ -64,7 +94,9 @@ def _select(
         """,
         (*params, limit),
     )
-    return [_row_to_dict(r) for r in cur.fetchall()]
+    rows = cur.fetchall()
+    attachments_by_log_id = _attachment_refs_by_log_id(conn, [int(r["id"]) for r in rows])
+    return [_row_to_dict(r, attachments_by_log_id.get(int(r["id"]), [])) for r in rows]
 
 
 @mcp.tool()
@@ -119,11 +151,47 @@ def query(
             where.append("trace_id = ?")
             params.append(traceId)
         if contains:
-            where.append("message LIKE ?")
-            params.append(f"%{contains}%")
+            like = f"%{contains}%"
+            where.append(
+                "(message LIKE ? OR EXISTS ("
+                "SELECT 1 FROM log_attachments a "
+                "WHERE a.log_id = logs.id AND (a.name LIKE ? OR a.content_text LIKE ?)"
+                "))"
+            )
+            params.extend([like, like, like])
 
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
         return _select(conn, where_sql=where_sql, params=params, limit=limit)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def attachment(id: int) -> dict[str, Any]:
+    """Return attachment content by id."""
+    settings = load_settings()
+    conn = _connect_readonly(settings.db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, log_id, kind, name, content_text, size_bytes
+            FROM log_attachments
+            WHERE id = ?
+            """,
+            (int(id),),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError("attachment not found")
+        return {
+            "id": int(row["id"]),
+            "logId": int(row["log_id"]),
+            "kind": str(row["kind"]),
+            "name": str(row["name"]),
+            "sizeBytes": int(row["size_bytes"]),
+            "content": str(row["content_text"]),
+        }
     finally:
         conn.close()
 

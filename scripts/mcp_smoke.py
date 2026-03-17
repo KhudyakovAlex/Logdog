@@ -34,12 +34,27 @@ async def main() -> None:
             else:
                 print("recent.content:", [c.model_dump() for c in res.content])
 
+            recent_rows = res.structuredContent if isinstance(res.structuredContent, list) else []
+            first_attachment_id = None
+            if recent_rows:
+                attachments = recent_rows[0].get("attachments") or []
+                if attachments:
+                    first_attachment_id = attachments[0].get("id")
+
             with anyio.fail_after(10):
                 res2 = await session.call_tool("query", {"app": "demo", "contains": "hello", "limit": 5})
             if res2.structuredContent is not None:
                 print("query.structuredContent:", res2.structuredContent)
             else:
                 print("query.content:", [c.model_dump() for c in res2.content])
+
+            if first_attachment_id is not None:
+                with anyio.fail_after(10):
+                    res3 = await session.call_tool("attachment", {"id": first_attachment_id})
+                if res3.structuredContent is not None:
+                    print("attachment.structuredContent:", res3.structuredContent)
+                else:
+                    print("attachment.content:", [c.model_dump() for c in res3.content])
 
 
 if __name__ == "__main__":

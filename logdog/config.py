@@ -23,7 +23,7 @@ class Settings:
 
 def load_settings() -> Settings:
     db_path = Path(os.getenv("LOGDOG_DB_PATH", "./data/logdog.db"))
-    http_max_bytes = _env_int("LOGDOG_HTTP_MAX_BYTES", 262_144)
+    http_max_bytes = _env_int("LOGDOG_HTTP_MAX_BYTES", 4_194_304)
     db_max_bytes = _env_int("LOGDOG_DB_MAX_BYTES", 1_073_741_824)
     retention_target_fraction = float(os.getenv("LOGDOG_DB_TARGET_FRACTION", "0.9"))
     retention_check_interval_s = _env_int("LOGDOG_RETENTION_CHECK_INTERVAL_S", 10)

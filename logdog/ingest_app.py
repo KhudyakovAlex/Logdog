@@ -8,8 +8,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from logdog.config import load_settings
-from logdog.db import LogRow, LogdogDB
-from logdog.models import AppInfo, LogIn, LogOut
+from logdog.db import AttachmentRow, LogRow, LogdogDB
+from logdog.models import AppInfo, AttachmentOut, AttachmentRef, LogIn, LogOut
 
 
 settings = load_settings()
@@ -36,6 +36,20 @@ def _row_to_out(row: LogRow) -> LogOut:
         message=row.message,
         traceId=row.trace_id,
         fields=row.fields,
+        attachments=[
+            AttachmentRef(id=a.id, kind=a.kind, name=a.name, sizeBytes=a.size_bytes) for a in row.attachments
+        ],
+    )
+
+
+def _attachment_to_out(row: AttachmentRow) -> AttachmentOut:
+    return AttachmentOut(
+        id=row.id,
+        logId=row.log_id,
+        kind=row.kind,
+        name=row.name,
+        sizeBytes=row.size_bytes,
+        content=row.content,
     )
 
 
@@ -67,6 +81,7 @@ async def post_log(request: Request) -> LogOut:
         message=log_in.message,
         trace_id=log_in.traceId,
         fields=log_in.fields,
+        attachments=[a.model_dump() for a in log_in.attachments],
     )
 
     return _row_to_out(row)
@@ -109,6 +124,14 @@ def api_query(
 def api_apps(limit: int = 500) -> list[AppInfo]:
     rows = db.apps(limit=limit)
     return [AppInfo.model_validate(r) for r in rows]
+
+
+@app.get("/api/attachments/{attachment_id}", response_model=AttachmentOut)
+def api_attachment(attachment_id: int) -> AttachmentOut:
+    row = db.attachment(attachment_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="attachment not found")
+    return _attachment_to_out(row)
 
 
 @app.post("/api/purge")
