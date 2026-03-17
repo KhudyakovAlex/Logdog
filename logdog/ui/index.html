@@ -179,6 +179,22 @@
       .attachment-link:hover {
         border-color: color-mix(in srgb, var(--accent) 65%, var(--border));
       }
+      .copy-btn {
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: color-mix(in srgb, #55d6c2 15%, #0a1326);
+        border: 1px solid color-mix(in srgb, #55d6c2 40%, var(--border));
+        color: #55d6c2;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        display: block;
+        margin-top: 10px;
+      }
+      .copy-btn:hover {
+        border-color: color-mix(in srgb, #55d6c2 70%, var(--border));
+        background: color-mix(in srgb, #55d6c2 25%, #0a1326);
+      }
       .viewer-backdrop {
         position: fixed;
         inset: 0;
@@ -1038,9 +1054,8 @@
 
           const copyBtn = document.createElement("button");
           copyBtn.type = "button";
-          copyBtn.className = "attachment-link mono";
-          copyBtn.textContent = "copy";
-          copyBtn.style.marginTop = "8px";
+          copyBtn.className = "copy-btn mono";
+          copyBtn.textContent = "Copy";
           copyBtn.addEventListener("click", () => copyToClipboard(msg));
           msgEl.appendChild(copyBtn);
 
