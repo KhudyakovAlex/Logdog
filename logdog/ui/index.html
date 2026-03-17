@@ -109,6 +109,16 @@
         align-items: center;
         flex-wrap: wrap;
       }
+      .check {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text);
+      }
+      .check input {
+        width: auto;
+        margin: 0;
+      }
       .meta {
         margin-top: 10px;
         color: var(--muted);
@@ -243,6 +253,12 @@
               <label class="small"><input id="useQuery" type="checkbox" /> использовать query (иначе recent)</label>
             </div>
           </div>
+          <div class="grid-4">
+            <label>Отображение</label>
+            <div class="row">
+              <label class="check"><input id="showSystemInfo" type="checkbox" /> Показывать системную информацию</label>
+            </div>
+          </div>
           <div class="grid-12 right">
             <div class="btns">
               <button class="primary" id="btnLoad">Load</button>
@@ -272,7 +288,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-      const state = { timer: null, lastCount: 0, lastLoadAt: 0 };
+      const state = { timer: null, lastCount: 0, lastLoadAt: 0, rows: [] };
 
       function toMsFromDateTimeLocal(v) {
         if (!v) return null;
@@ -311,6 +327,10 @@
         return s.trim() ? s : null;
       }
 
+      function showSystemInfoEnabled() {
+        return $("showSystemInfo").checked;
+      }
+
       function showError(msg) {
         const box = $("errbox");
         box.textContent = msg;
@@ -346,6 +366,7 @@
         if (urlParams.has("untilIso")) $("until").value = urlParams.get("untilIso") || "";
         if (urlParams.has("autoEvery")) $("autoEvery").value = urlParams.get("autoEvery") || "0";
         if (urlParams.has("useQuery")) $("useQuery").checked = (urlParams.get("useQuery") === "1");
+        if (urlParams.has("showSystemInfo")) $("showSystemInfo").checked = (urlParams.get("showSystemInfo") === "1");
       }
 
       async function loadApps() {
@@ -402,7 +423,7 @@
           const trace = r.traceId || "";
           const who = chatWho(r);
           const chat = who ? (chatText(r) || r.message) : null;
-          const fields = (!who && r.fields) ? JSON.stringify(r.fields) : "";
+          const fields = (showSystemInfoEnabled() && !who && r.fields) ? JSON.stringify(r.fields) : "";
           const msg = who ? (`${who}:\n${chat}`) : (r.message + (fields ? "\n" + fields : ""));
 
           const row = document.createElement("div");
@@ -439,8 +460,9 @@
             throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
           }
           const data = await res.json();
-          render(Array.isArray(data) ? data : []);
-          state.lastCount = Array.isArray(data) ? data.length : 0;
+          state.rows = Array.isArray(data) ? data : [];
+          render(state.rows);
+          state.lastCount = state.rows.length;
           state.lastLoadAt = Date.now();
           const ms = Math.round(performance.now() - started);
           $("status").textContent = `loaded ${state.lastCount} rows in ${ms}ms via ${url}`;
@@ -497,6 +519,7 @@
         if ($("until").value) sp.set("untilIso", $("until").value);
         sp.set("autoEvery", $("autoEvery").value);
         sp.set("useQuery", $("useQuery").checked ? "1" : "0");
+        sp.set("showSystemInfo", $("showSystemInfo").checked ? "1" : "0");
         const url = location.origin + location.pathname + "?" + sp.toString();
         navigator.clipboard.writeText(url).then(
           () => { $("status").textContent = "copied link to clipboard"; },
@@ -509,6 +532,7 @@
       $("btnClear").addEventListener("click", purgeLogs);
       $("btnCopyLink").addEventListener("click", copyLink);
       $("autoEvery").addEventListener("change", updateAuto);
+      $("showSystemInfo").addEventListener("change", () => render(state.rows));
 
       // init from URL
       setUIFromParams(new URLSearchParams(location.search));
