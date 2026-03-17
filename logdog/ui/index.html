@@ -478,6 +478,7 @@
             <div class="btns">
               <button class="primary" id="viewerFormattedBtn">Formatted</button>
               <button id="viewerRawBtn">Raw</button>
+              <button id="viewerCopyBtn">Copy</button>
               <button id="viewerCloseBtn">Close</button>
             </div>
           </div>
@@ -643,6 +644,19 @@
       function updateViewerButtons() {
         $("viewerFormattedBtn").disabled = state.viewerMode === "formatted";
         $("viewerRawBtn").disabled = state.viewerMode === "raw";
+      }
+
+      function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(
+          () => { $("status").textContent = "copied to clipboard"; },
+          () => { $("status").textContent = "failed to copy"; }
+        );
+      }
+
+      function copyCurrentAttachment() {
+        const att = state.currentAttachment;
+        if (!att) return;
+        copyToClipboard(String(att.content || ""));
       }
 
       function closeViewer() {
@@ -1022,6 +1036,14 @@
             msgEl.appendChild(list);
           }
 
+          const copyBtn = document.createElement("button");
+          copyBtn.type = "button";
+          copyBtn.className = "attachment-link mono";
+          copyBtn.textContent = "copy";
+          copyBtn.style.marginTop = "8px";
+          copyBtn.addEventListener("click", () => copyToClipboard(msg));
+          msgEl.appendChild(copyBtn);
+
           const traceEl = document.createElement("div");
           traceEl.className = "col-trace mono";
           traceEl.textContent = trace;
@@ -1125,6 +1147,7 @@
       $("viewerCloseBtn").addEventListener("click", closeViewer);
       $("viewerFormattedBtn").addEventListener("click", () => setViewerMode("formatted"));
       $("viewerRawBtn").addEventListener("click", () => setViewerMode("raw"));
+      $("viewerCopyBtn").addEventListener("click", copyCurrentAttachment);
       $("viewerBackdrop").addEventListener("click", (e) => {
         if (e.target === $("viewerBackdrop")) closeViewer();
       });
