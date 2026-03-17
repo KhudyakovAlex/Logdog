@@ -189,6 +189,9 @@
         padding: 20px;
         z-index: 20;
       }
+      .viewer-backdrop[hidden] {
+        display: none;
+      }
       .viewer {
         width: min(1200px, 100%);
         height: min(92vh, 100%);
@@ -222,6 +225,8 @@
         padding: 14px;
         overflow: auto;
         flex: 1;
+        font-size: 15px;
+        line-height: 1.5;
       }
       .viewer-empty {
         color: var(--muted);
@@ -235,11 +240,13 @@
         overflow: auto;
         white-space: pre-wrap;
         word-break: break-word;
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.45;
       }
       .json-node {
         margin-left: 12px;
+        font-size: 15px;
+        line-height: 1.45;
       }
       .json-node details {
         margin: 4px 0;
@@ -247,6 +254,7 @@
       .json-node summary {
         cursor: pointer;
         color: var(--text);
+        font-size: 15px;
       }
       .json-children {
         margin-left: 16px;
@@ -272,6 +280,8 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
+        font-size: 17px;
+        line-height: 1.6;
       }
       .markdown-section {
         border: 1px solid var(--border);
@@ -282,9 +292,12 @@
         cursor: pointer;
         padding: 10px 12px;
         font-weight: 700;
+        font-size: 17px;
       }
       .markdown-section-body {
         padding: 0 12px 12px;
+        font-size: 17px;
+        line-height: 1.6;
       }
       .markdown-section-body > *:first-child {
         margin-top: 0;
@@ -295,14 +308,21 @@
       .markdown-view h1, .markdown-view h2, .markdown-view h3, .markdown-view h4, .markdown-view h5, .markdown-view h6 {
         margin: 18px 0 10px;
       }
-      .markdown-view p, .markdown-view ul, .markdown-view ol, .markdown-view blockquote {
+      .markdown-view h1 { font-size: 28px; }
+      .markdown-view h2 { font-size: 24px; }
+      .markdown-view h3 { font-size: 20px; }
+      .markdown-view h4, .markdown-view h5, .markdown-view h6 { font-size: 18px; }
+      .markdown-view p, .markdown-view ul, .markdown-view ol, .markdown-view blockquote, .markdown-view li {
         margin: 10px 0;
+        font-size: 17px;
+        line-height: 1.6;
       }
       .markdown-view code {
         font-family: var(--mono);
         background: color-mix(in srgb, #0a1326 86%, transparent);
         padding: 1px 5px;
         border-radius: 6px;
+        font-size: 15px;
       }
       .markdown-view pre {
         margin: 10px 0;
@@ -315,6 +335,7 @@
       .markdown-view pre code {
         background: transparent;
         padding: 0;
+        font-size: 15px;
       }
       .markdown-view blockquote {
         padding-left: 12px;
