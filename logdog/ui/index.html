@@ -48,6 +48,23 @@
         color: var(--muted);
         font-size: 18px;
       }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .version-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, #0a1326 85%, transparent);
+        color: var(--muted);
+        font-size: 15px;
+        font-family: var(--mono);
+      }
       .panel {
         background: color-mix(in srgb, var(--panel) 92%, black);
         border: 1px solid var(--border);
@@ -275,6 +292,25 @@
         font-size: 15px;
         line-height: 1.45;
       }
+      .viewer-image-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .viewer-image {
+        max-width: 100%;
+        max-height: min(72vh, 1200px);
+        object-fit: contain;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #081120;
+      }
+      .viewer-image-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
       .json-node {
         margin-left: 12px;
         font-size: 15px;
@@ -411,7 +447,10 @@
     <div class="wrap">
       <header>
         <div>
-          <h1>Logdog UI</h1>
+          <div class="title-row">
+            <h1>Logdog UI</h1>
+            <span class="version-badge" id="serverVersion">server ?</span>
+          </div>
           <div class="sub">Просмотр логов и вложений из SQLite через HTTP API: <span class="mono">/api/recent</span>, <span class="mono">/api/query</span>, <span class="mono">/api/attachments/{id}</span></div>
         </div>
         <div class="sub">Ingest: <span class="mono">POST /logs</span></div>
@@ -649,6 +688,18 @@
         }
       }
 
+      async function loadServerInfo() {
+        try {
+          const res = await fetch("/api/info", { headers: { "Accept": "application/json" } });
+          if (!res.ok) return;
+          const data = await res.json();
+          const version = (data && data.version) ? String(data.version) : "";
+          $("serverVersion").textContent = version ? `server ${version}` : "server ?";
+        } catch (_) {
+          // ignore
+        }
+      }
+
       function buildApiUrl() {
         const p = paramsFromUI();
         const useQuery = $("useQuery").checked;
@@ -690,6 +741,10 @@
       function copyCurrentAttachment() {
         const att = state.currentAttachment;
         if (!att) return;
+        if (att.kind === "image") {
+          copyToClipboard(String(att.downloadUrl || ""), "copied image URL");
+          return;
+        }
         copyToClipboard(String(att.content || ""));
       }
 
@@ -834,11 +889,23 @@
 
         $("viewerBackdrop").hidden = false;
         $("viewerTitle").textContent = att.name || `Attachment #${att.id}`;
-        $("viewerMeta").textContent = `${String(att.kind || "").toUpperCase()}  ${fmtBytes(att.sizeBytes)}  log:${att.logId}`;
+        const metaParts = [
+          String(att.kind || "").toUpperCase(),
+          att.mime ? String(att.mime) : null,
+          fmtBytes(att.sizeBytes),
+          (att.width && att.height) ? `${att.width}x${att.height}` : null,
+          `log:${att.logId}`,
+        ].filter(Boolean);
+        $("viewerMeta").textContent = metaParts.join("  ");
         updateViewerButtons();
 
         const body = $("viewerBody");
         body.innerHTML = "";
+
+        if (att.kind === "image") {
+          body.appendChild(state.viewerMode === "raw" ? renderImageAttachmentRaw(att) : renderImageAttachment(att));
+          return;
+        }
 
         if (state.viewerMode === "raw") {
           const pre = document.createElement("pre");
@@ -854,6 +921,55 @@
         }
 
         body.appendChild(renderMarkdownAttachment(att));
+      }
+
+      function renderImageAttachment(att) {
+        const wrap = document.createElement("div");
+        wrap.className = "viewer-image-wrap";
+
+        const actions = document.createElement("div");
+        actions.className = "viewer-image-actions";
+        if (att.downloadUrl) {
+          const link = document.createElement("a");
+          link.href = String(att.downloadUrl);
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          link.textContent = "Open original";
+          actions.appendChild(link);
+        }
+        wrap.appendChild(actions);
+
+        if (!att.downloadUrl) {
+          const empty = document.createElement("div");
+          empty.className = "viewer-empty";
+          empty.textContent = "image URL is unavailable";
+          wrap.appendChild(empty);
+          return wrap;
+        }
+
+        const img = document.createElement("img");
+        img.className = "viewer-image";
+        img.alt = String(att.name || "image attachment");
+        img.src = String(att.downloadUrl);
+        wrap.appendChild(img);
+        return wrap;
+      }
+
+      function renderImageAttachmentRaw(att) {
+        const pre = document.createElement("pre");
+        pre.className = "viewer-pre mono";
+        pre.textContent = JSON.stringify({
+          id: att.id,
+          logId: att.logId,
+          kind: att.kind,
+          name: att.name,
+          sizeBytes: att.sizeBytes,
+          mime: att.mime || null,
+          width: att.width || null,
+          height: att.height || null,
+          downloadUrl: att.downloadUrl || null,
+        }, null, 2);
+        return pre;
       }
 
       function renderJsonAttachment(att) {
@@ -1141,7 +1257,10 @@
               const btn = document.createElement("button");
               btn.type = "button";
               btn.className = "attachment-link mono";
-              btn.textContent = `${String(a.name || "attachment")} [${String(a.kind || "").toUpperCase()} ${fmtBytes(a.sizeBytes)}]`;
+              const parts = [String(a.kind || "").toUpperCase()];
+              if (a.mime) parts.push(String(a.mime).replace("image/", ""));
+              parts.push(fmtBytes(a.sizeBytes));
+              btn.textContent = `${String(a.name || "attachment")} [${parts.join(" ")}]`;
               btn.addEventListener("click", () => openAttachment(a.id));
               list.appendChild(btn);
             }
@@ -1282,6 +1401,7 @@
 
       setUIFromParams(new URLSearchParams(location.search));
       updateViewerButtons();
+      loadServerInfo();
       loadApps();
       updateAuto();
       loadOnce();

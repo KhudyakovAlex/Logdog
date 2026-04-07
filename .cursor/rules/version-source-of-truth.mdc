@@ -1,0 +1,13 @@
+---
+description: Keep Logdog version in one source of truth
+alwaysApply: true
+---
+
+# Logdog Versioning
+
+- The single source of truth for the Logdog version is `logdog/__init__.py` in `__version__`.
+- When the project version changes, update `logdog/__init__.py` first.
+- The version format in this project is local date and time: `yyyy-MM-dd HH:mm`.
+- Do not hardcode the version separately in UI, API handlers, docs examples, or other files when it can be read from `__version__`.
+- If code exposes the version to the UI or API, wire it from `logdog.__version__`.
+- When making a version bump, also update any user-facing docs only if they explicitly mention the version number.

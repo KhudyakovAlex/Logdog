@@ -27,6 +27,9 @@ class AttachmentRefRow:
     kind: str
     name: str
     size_bytes: int
+    mime_type: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -35,8 +38,12 @@ class AttachmentRow:
     log_id: int
     kind: str
     name: str
-    content: str
+    content: Optional[str]
     size_bytes: int
+    mime_type: Optional[str] = None
+    blob_path: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -56,12 +63,15 @@ class LogdogDB:
         self,
         db_path: Path,
         *,
+        blob_dir: Path,
         db_max_bytes: int,
         retention_target_fraction: float = 0.9,
         retention_check_interval_s: int = 10,
     ) -> None:
         self._db_path = db_path
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._blob_dir = blob_dir
+        self._blob_dir.mkdir(parents=True, exist_ok=True)
 
         self._db_max_bytes = int(db_max_bytes)
         self._target_bytes = int(self._db_max_bytes * float(retention_target_fraction))
@@ -115,16 +125,31 @@ class LogdogDB:
               name TEXT NOT NULL,
               content_text TEXT NOT NULL,
               size_bytes INTEGER NOT NULL,
+              mime_type TEXT NULL,
+              blob_path TEXT NULL,
+              width INTEGER NULL,
+              height INTEGER NULL,
               FOREIGN KEY(log_id) REFERENCES logs(id) ON DELETE CASCADE
             );
             """
         )
+        self._ensure_column("log_attachments", "mime_type", "TEXT NULL")
+        self._ensure_column("log_attachments", "blob_path", "TEXT NULL")
+        self._ensure_column("log_attachments", "width", "INTEGER NULL")
+        self._ensure_column("log_attachments", "height", "INTEGER NULL")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_app_ts ON logs(app, ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_level_ts ON logs(level, ts);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_logs_trace_id ON logs(trace_id);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_log_attachments_log_id ON log_attachments(log_id);")
         self._conn.commit()
+
+    def _ensure_column(self, table: str, column: str, ddl: str) -> None:
+        cur = self._conn.cursor()
+        cur.execute(f"PRAGMA table_info({table});")
+        existing = {str(r["name"]) for r in cur.fetchall()}
+        if column not in existing:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl};")
 
     def insert(
         self,
@@ -152,14 +177,28 @@ class LogdogDB:
             )
             log_id = int(cur.lastrowid)
             for attachment in attachments or []:
-                content = str(attachment["content"])
-                size_bytes = len(content.encode("utf-8"))
+                content = str(attachment.get("content") or "")
+                size_bytes = int(attachment.get("size_bytes") or len(content.encode("utf-8")))
+                mime_type = str(attachment["mime_type"]) if attachment.get("mime_type") else None
+                blob_path = str(attachment["blob_path"]) if attachment.get("blob_path") else None
+                width = int(attachment["width"]) if attachment.get("width") is not None else None
+                height = int(attachment["height"]) if attachment.get("height") is not None else None
                 cur.execute(
                     """
-                    INSERT INTO log_attachments(log_id, kind, name, content_text, size_bytes)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO log_attachments(log_id, kind, name, content_text, size_bytes, mime_type, blob_path, width, height)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (log_id, str(attachment["kind"]), str(attachment["name"]), content, size_bytes),
+                    (
+                        log_id,
+                        str(attachment["kind"]),
+                        str(attachment["name"]),
+                        content,
+                        size_bytes,
+                        mime_type,
+                        blob_path,
+                        width,
+                        height,
+                    ),
                 )
                 attachment_rows.append(
                     AttachmentRefRow(
@@ -167,6 +206,9 @@ class LogdogDB:
                         kind=str(attachment["kind"]),
                         name=str(attachment["name"]),
                         size_bytes=size_bytes,
+                        mime_type=mime_type,
+                        width=width,
+                        height=height,
                     )
                 )
             self._conn.commit()
@@ -293,7 +335,7 @@ class LogdogDB:
             cur = self._conn.cursor()
             cur.execute(
                 """
-                SELECT id, log_id, kind, name, content_text, size_bytes
+                SELECT id, log_id, kind, name, content_text, size_bytes, mime_type, blob_path, width, height
                 FROM log_attachments
                 WHERE id = ?
                 """,
@@ -309,8 +351,12 @@ class LogdogDB:
             log_id=int(row["log_id"]),
             kind=str(row["kind"]),
             name=str(row["name"]),
-            content=str(row["content_text"]),
+            content=None if str(row["kind"]) == "image" else str(row["content_text"]),
             size_bytes=int(row["size_bytes"]),
+            mime_type=str(row["mime_type"]) if row["mime_type"] is not None else None,
+            blob_path=str(row["blob_path"]) if row["blob_path"] is not None else None,
+            width=int(row["width"]) if row["width"] is not None else None,
+            height=int(row["height"]) if row["height"] is not None else None,
         )
 
     def purge(self) -> int:
@@ -318,6 +364,7 @@ class LogdogDB:
             cur = self._conn.cursor()
             cur.execute("SELECT COUNT(*) AS cnt FROM logs;")
             before = int(cur.fetchone()[0])
+            blob_paths = self._blob_paths_for_log_ids(cur, None)
             cur.execute("DELETE FROM logs;")
             self._conn.commit()
 
@@ -326,6 +373,7 @@ class LogdogDB:
             cur.execute("PRAGMA incremental_vacuum(2000);")
             self._conn.commit()
 
+        self._delete_blob_files(blob_paths)
         return before
 
     def maybe_enforce_retention(self) -> None:
@@ -379,12 +427,47 @@ class LogdogDB:
             if not ids:
                 return 0
 
+            blob_paths = self._blob_paths_for_log_ids(cur, ids)
             cur.execute(
                 f"DELETE FROM logs WHERE id IN ({','.join('?' for _ in ids)})",
                 ids,
             )
             self._conn.commit()
-            return int(cur.rowcount)
+            deleted = int(cur.rowcount)
+
+        self._delete_blob_files(blob_paths)
+        return deleted
+
+    def _blob_paths_for_log_ids(self, cur: sqlite3.Cursor, log_ids: Optional[list[int]]) -> list[Path]:
+        if log_ids is None:
+            cur.execute(
+                """
+                SELECT blob_path
+                FROM log_attachments
+                WHERE kind = 'image' AND blob_path IS NOT NULL AND blob_path != ''
+                """
+            )
+        else:
+            if not log_ids:
+                return []
+            cur.execute(
+                f"""
+                SELECT blob_path
+                FROM log_attachments
+                WHERE kind = 'image' AND blob_path IS NOT NULL AND blob_path != ''
+                  AND log_id IN ({','.join('?' for _ in log_ids)})
+                """,
+                log_ids,
+            )
+        return [self._blob_dir / str(r["blob_path"]) for r in cur.fetchall()]
+
+    @staticmethod
+    def _delete_blob_files(paths: Iterable[Path]) -> None:
+        for path in paths:
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                continue
 
     def _rows_to_logs(self, rows: Iterable[sqlite3.Row]) -> list[LogRow]:
         row_list = list(rows)
@@ -400,7 +483,7 @@ class LogdogDB:
             cur = self._conn.cursor()
             cur.execute(
                 f"""
-                SELECT id, log_id, kind, name, size_bytes
+                SELECT id, log_id, kind, name, size_bytes, mime_type, width, height
                 FROM log_attachments
                 WHERE log_id IN ({','.join('?' for _ in unique_ids)})
                 ORDER BY id ASC
@@ -417,6 +500,9 @@ class LogdogDB:
                     kind=str(r["kind"]),
                     name=str(r["name"]),
                     size_bytes=int(r["size_bytes"]),
+                    mime_type=str(r["mime_type"]) if r["mime_type"] is not None else None,
+                    width=int(r["width"]) if r["width"] is not None else None,
+                    height=int(r["height"]) if r["height"] is not None else None,
                 )
             )
         return result

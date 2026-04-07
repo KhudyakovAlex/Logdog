@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 from logdog.config import load_settings
 
@@ -54,7 +54,7 @@ def _attachment_refs_by_log_id(conn: sqlite3.Connection, log_ids: list[int]) -> 
     cur = conn.cursor()
     cur.execute(
         f"""
-        SELECT id, log_id, kind, name, size_bytes
+        SELECT id, log_id, kind, name, size_bytes, mime_type, width, height
         FROM log_attachments
         WHERE log_id IN ({','.join('?' for _ in unique_ids)})
         ORDER BY id ASC
@@ -70,6 +70,9 @@ def _attachment_refs_by_log_id(conn: sqlite3.Connection, log_ids: list[int]) -> 
                 "kind": str(r["kind"]),
                 "name": str(r["name"]),
                 "sizeBytes": int(r["size_bytes"]),
+                "mime": str(r["mime_type"]) if r["mime_type"] is not None else None,
+                "width": int(r["width"]) if r["width"] is not None else None,
+                "height": int(r["height"]) if r["height"] is not None else None,
             }
         )
     return result
@@ -175,7 +178,7 @@ def attachment(id: int) -> dict[str, Any]:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT id, log_id, kind, name, content_text, size_bytes
+            SELECT id, log_id, kind, name, content_text, size_bytes, mime_type, width, height
             FROM log_attachments
             WHERE id = ?
             """,
@@ -184,14 +187,51 @@ def attachment(id: int) -> dict[str, Any]:
         row = cur.fetchone()
         if row is None:
             raise ValueError("attachment not found")
+        if str(row["kind"]) == "image":
+            raise ValueError("attachment is an image; use image_attachment(id)")
         return {
             "id": int(row["id"]),
             "logId": int(row["log_id"]),
             "kind": str(row["kind"]),
             "name": str(row["name"]),
             "sizeBytes": int(row["size_bytes"]),
+            "mime": str(row["mime_type"]) if row["mime_type"] is not None else None,
+            "width": int(row["width"]) if row["width"] is not None else None,
+            "height": int(row["height"]) if row["height"] is not None else None,
             "content": str(row["content_text"]),
         }
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def image_attachment(id: int) -> Image:
+    """Return image attachment content by id."""
+    settings = load_settings()
+    conn = _connect_readonly(settings.db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT kind, blob_path
+            FROM log_attachments
+            WHERE id = ?
+            """,
+            (int(id),),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise ValueError("attachment not found")
+        if str(row["kind"]) != "image":
+            raise ValueError("attachment is not an image")
+        blob_path = str(row["blob_path"]) if row["blob_path"] is not None else ""
+        if not blob_path:
+            raise ValueError("image attachment file path is missing")
+
+        path = settings.blob_dir / blob_path
+        if not path.exists():
+            raise ValueError("image attachment file not found")
+        return Image(path=str(path))
     finally:
         conn.close()
 
