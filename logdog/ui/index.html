@@ -195,6 +195,22 @@
         border-color: color-mix(in srgb, #55d6c2 70%, var(--border));
         background: color-mix(in srgb, #55d6c2 25%, #0a1326);
       }
+      .copy-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .copy-actions .copy-btn {
+        margin-top: 0;
+      }
+      .copyable-cell {
+        cursor: pointer;
+      }
+      .copyable-cell:hover {
+        color: var(--accent);
+        text-decoration: underline;
+      }
       .viewer-backdrop {
         position: fixed;
         inset: 0;
@@ -463,6 +479,8 @@
               <button class="primary" id="btnLoad">Load</button>
               <button id="btnClear">Clear</button>
               <button id="btnCopyLink" title="Скопировать URL с параметрами">Copy link</button>
+              <button id="btnCopyCurrent">Copy current</button>
+              <button id="btnCopyCurrentAll">Copy current all</button>
             </div>
           </div>
         </div>
@@ -662,9 +680,9 @@
         $("viewerRawBtn").disabled = state.viewerMode === "raw";
       }
 
-      function copyToClipboard(text) {
+      function copyToClipboard(text, successMessage = "copied to clipboard") {
         navigator.clipboard.writeText(text).then(
-          () => { $("status").textContent = "copied to clipboard"; },
+          () => { $("status").textContent = successMessage; },
           () => { $("status").textContent = "failed to copy"; }
         );
       }
@@ -673,6 +691,88 @@
         const att = state.currentAttachment;
         if (!att) return;
         copyToClipboard(String(att.content || ""));
+      }
+
+      function rowMessageText(row) {
+        const who = chatWho(row);
+        const chat = who ? (chatText(row) || row.message) : null;
+        const fields = (showSystemInfoEnabled() && !who && row.fields) ? JSON.stringify(row.fields) : "";
+        return who ? (`${who}:\n${chat}`) : (String(row.message || "") + (fields ? "\n" + fields : ""));
+      }
+
+      async function fetchAttachmentData(id) {
+        const attachmentId = parseInt(String(id), 10);
+        if (!Number.isFinite(attachmentId) || attachmentId <= 0) {
+          throw new Error("invalid attachment id");
+        }
+
+        const cached = state.attachmentCache.get(attachmentId);
+        if (cached) return cached;
+
+        const res = await fetch(`/api/attachments/${attachmentId}`, { headers: { "Accept": "application/json" } });
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+        }
+
+        const data = await res.json();
+        state.attachmentCache.set(attachmentId, data);
+        return data;
+      }
+
+      async function buildFullLogObject(row) {
+        const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+        const fullAttachments = [];
+        for (const attachment of attachments) {
+          fullAttachments.push(await fetchAttachmentData(attachment.id));
+        }
+
+        return {
+          id: row.id,
+          ts: row.ts,
+          level: row.level,
+          app: row.app,
+          message: row.message,
+          traceId: row.traceId,
+          fields: row.fields ?? null,
+          attachments: fullAttachments,
+        };
+      }
+
+      async function copyLogWithAttachments(row) {
+        try {
+          const fullLog = await buildFullLogObject(row);
+          copyToClipboard(JSON.stringify(fullLog, null, 2), `copied full log: ${String(row.id)}`);
+        } catch (e) {
+          $("status").textContent = String(e && e.message ? e.message : e);
+        }
+      }
+
+      function copyCurrentRows() {
+        if (!state.rows.length) {
+          $("status").textContent = "no rows loaded";
+          return;
+        }
+
+        const text = state.rows.map((row) => rowMessageText(row)).join("\n\n--------------------\n\n");
+        copyToClipboard(text, `copied ${state.rows.length} rows`);
+      }
+
+      async function copyCurrentRowsWithAttachments() {
+        if (!state.rows.length) {
+          $("status").textContent = "no rows loaded";
+          return;
+        }
+
+        try {
+          const fullRows = [];
+          for (const row of state.rows) {
+            fullRows.push(await buildFullLogObject(row));
+          }
+          copyToClipboard(JSON.stringify(fullRows, null, 2), `copied ${fullRows.length} full rows`);
+        } catch (e) {
+          $("status").textContent = String(e && e.message ? e.message : e);
+        }
       }
 
       function closeViewer() {
@@ -716,13 +816,7 @@
 
         setViewerLoading("Attachment", `#${attachmentId}`);
         try {
-          const res = await fetch(`/api/attachments/${attachmentId}`, { headers: { "Accept": "application/json" } });
-          if (!res.ok) {
-            const txt = await res.text();
-            throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
-          }
-          const data = await res.json();
-          state.attachmentCache.set(attachmentId, data);
+          const data = await fetchAttachmentData(attachmentId);
           state.currentAttachment = data;
           renderCurrentAttachment();
         } catch (e) {
@@ -1008,10 +1102,7 @@
         for (const r of rows) {
           const lvl = String(r.level || "debug");
           const trace = r.traceId || "";
-          const who = chatWho(r);
-          const chat = who ? (chatText(r) || r.message) : null;
-          const fields = (showSystemInfoEnabled() && !who && r.fields) ? JSON.stringify(r.fields) : "";
-          const msg = who ? (`${who}:\n${chat}`) : (r.message + (fields ? "\n" + fields : ""));
+          const msg = rowMessageText(r);
           const attachments = Array.isArray(r.attachments) ? r.attachments : [];
 
           const row = document.createElement("div");
@@ -1030,6 +1121,11 @@
           const appEl = document.createElement("div");
           appEl.className = "col-app mono";
           appEl.textContent = String(r.app || "");
+          if (r.app) {
+            appEl.classList.add("copyable-cell");
+            appEl.title = "Click to copy app";
+            appEl.addEventListener("click", () => copyToClipboard(String(r.app), `copied app: ${String(r.app)}`));
+          }
 
           const msgEl = document.createElement("div");
           msgEl.className = "msg";
@@ -1052,12 +1148,24 @@
             msgEl.appendChild(list);
           }
 
+          const copyActionsEl = document.createElement("div");
+          copyActionsEl.className = "copy-actions";
+
           const copyBtn = document.createElement("button");
           copyBtn.type = "button";
           copyBtn.className = "copy-btn mono";
           copyBtn.textContent = "Copy";
           copyBtn.addEventListener("click", () => copyToClipboard(msg));
-          msgEl.appendChild(copyBtn);
+          copyActionsEl.appendChild(copyBtn);
+
+          const copyAllBtn = document.createElement("button");
+          copyAllBtn.type = "button";
+          copyAllBtn.className = "copy-btn mono";
+          copyAllBtn.textContent = "Copy all";
+          copyAllBtn.addEventListener("click", () => copyLogWithAttachments(r));
+          copyActionsEl.appendChild(copyAllBtn);
+
+          msgEl.appendChild(copyActionsEl);
 
           const traceEl = document.createElement("div");
           traceEl.className = "col-trace mono";
@@ -1157,6 +1265,8 @@
       $("btnLoad").addEventListener("click", loadOnce);
       $("btnClear").addEventListener("click", purgeLogs);
       $("btnCopyLink").addEventListener("click", copyLink);
+      $("btnCopyCurrent").addEventListener("click", copyCurrentRows);
+      $("btnCopyCurrentAll").addEventListener("click", copyCurrentRowsWithAttachments);
       $("autoEvery").addEventListener("change", updateAuto);
       $("showSystemInfo").addEventListener("change", () => render(state.rows));
       $("viewerCloseBtn").addEventListener("click", closeViewer);
