@@ -169,6 +169,9 @@
         border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
         font-size: 19.5px;
       }
+      .trow-user-message {
+        background: color-mix(in srgb, white 4%, #0a1326);
+      }
       .trow:last-child { border-bottom: 0; }
       .mono { font-family: var(--mono); }
       .msg {
@@ -755,6 +758,10 @@
         return who ? (`${who}:\n${chat}`) : (String(row.message || "") + (fields ? "\n" + fields : ""));
       }
 
+      function messageStartsWithUser(row) {
+        return rowMessageText(row).trimStart().toUpperCase().startsWith("USER");
+      }
+
       async function fetchAttachmentData(id) {
         const attachmentId = parseInt(String(id), 10);
         if (!Number.isFinite(attachmentId) || attachmentId <= 0) {
@@ -1223,6 +1230,9 @@
 
           const row = document.createElement("div");
           row.className = "trow";
+          if (messageStartsWithUser(r)) {
+            row.classList.add("trow-user-message");
+          }
 
           const timeEl = document.createElement("div");
           timeEl.className = "mono";
